@@ -1,0 +1,6 @@
+services:
+  test_container:
+    build:
+      dockerfile: dockerfiles/test.Dockerfile
+    ports:
+      - "2222:22"
