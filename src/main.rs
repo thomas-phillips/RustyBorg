@@ -2,6 +2,7 @@ use borgbackup::common::{EncryptionMode, InitOptions};
 use clap::{Parser, Subcommand};
 
 mod borg;
+mod sshverify;
 
 #[derive(Parser, Debug)]
 #[command(name = "RustyBorg")]
@@ -27,14 +28,20 @@ enum Commands {
         archive: Option<String>,
         #[arg(long, num_args = 1.., value_delimiter = ' ')]
         paths: Vec<String>,
-        #[arg(long)]
-        pattern_file: String,
+        #[arg(long, num_args = 1.., value_delimiter = ' ')]
+        include_patterns: Option<Vec<String>>,
+        #[arg(long, num_args = 1.., value_delimiter = ' ')]
+        exclude_patterns: Option<Vec<String>>,
+    },
+    List {
+        repository: String,
+        passphrase: String,
     },
 }
 
 fn main() {
     let args = Args::parse();
-    println!("{:?}\n", args);
+    println!("{:#?}\n", args);
 
     match args.cmd {
         Commands::Init {
@@ -43,7 +50,7 @@ fn main() {
         } => {
             let init_options = InitOptions {
                 repository: repository_path,
-                encryption_mode: EncryptionMode::Repokey(passphrase),
+                encryption_mode: EncryptionMode::KeyfileBlake2(passphrase),
                 append_only: false,
                 make_parent_dirs: false,
                 storage_quota: None,
@@ -55,9 +62,19 @@ fn main() {
             archive,
             passphrase,
             paths,
-            pattern_file
-        } => borg::create::create_archive(repository_path, passphrase, archive, paths, pattern_file),
-
-        
+            include_patterns,
+            exclude_patterns,
+        } => borg::create::create_archive(
+            repository_path,
+            passphrase,
+            archive,
+            paths,
+            include_patterns,
+            exclude_patterns,
+        ),
+        Commands::List {
+            repository,
+            passphrase,
+        } => borg::list::list_contents(repository, passphrase),
     }
 }
