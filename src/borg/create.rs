@@ -1,13 +1,32 @@
 use borgbackup::common::{CommonOptions, CreateOptions, Pattern, PatternInstruction};
 use borgbackup::output::create::Create;
 use borgbackup::sync::create;
+use clap::Parser;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+// Struct for managing the necessary arguments for creating an archive.
+#[derive(Debug, Clone, Parser)]
+pub struct CreateArgs {
+    repository: String,
+    #[arg(short, long)]
+    passphrase: String,
+    #[arg(short, long)]
+    archive: Option<String>,
+    #[arg(long, num_args = 1.., value_delimiter = ' ')]
+    paths: Vec<String>,
+    #[arg(long, num_args = 1.., value_delimiter = ' ')]
+    include_patterns: Option<Vec<String>>,
+    #[arg(long, num_args = 1.., value_delimiter = ' ')]
+    exclude_patterns: Option<Vec<String>>,
+}
+
+// Creates a CreateOption struct using the struct's `new`
+// then manually sets the passphrase after `new` is called.
 fn new_create_options(
     repository: String,
     passphrase: String,
-    archive: String,
     paths: Vec<String>,
+    archive: String,
     pattern_instructions: Vec<PatternInstruction>,
 ) -> CreateOptions {
     let mut create_options = CreateOptions::new(repository, archive, paths, pattern_instructions);
@@ -15,7 +34,8 @@ fn new_create_options(
     create_options
 }
 
-fn print_command(commands: Vec<String>) {
+// Prints the command used for the BorgBackup crate.
+fn print_used_command(commands: Vec<String>) {
     println!("\nCommand used:");
 
     for command in commands.iter() {
@@ -24,6 +44,10 @@ fn print_command(commands: Vec<String>) {
     println!("");
 }
 
+// This function generates a Vector of `PatternInstruction`
+// based upon a provided Option Vector of type String
+// If `include_patterns` and `exclude_patterns` are of type None then an
+// empty Vector of type String will be returned.
 fn generate_pattern_instructions(
     include_patterns: Option<Vec<String>>,
     exclude_patterns: Option<Vec<String>>,
@@ -46,27 +70,32 @@ fn generate_pattern_instructions(
     return vec![include_pattern_instruction, exclude_pattern_instruction].concat();
 }
 
-pub fn create_archive(
-    repository_path: String,
-    passphrase: String,
-    archive: Option<String>,
-    paths: Vec<String>,
-    include_patterns: Option<Vec<String>>,
-    exclude_patterns: Option<Vec<String>>,
-) {
+// This is the entrypoint of the **create** module where variable of type
+// CreateArgs is passed containing the necessary information
+// to create a borg archive.
+//
+// The archive name will be automatically set to epoch time if isn't set,
+// and pattern instructions are generated from include and excude Vectors.
+//
+// Upon a successful archive creation the start and end time, duration and
+// commands used are displayed.
+pub fn create_archive(create_args: CreateArgs) {
     let archive_name: String =
-        archive.unwrap_or(match SystemTime::now().duration_since(UNIX_EPOCH) {
-            Ok(duration) => Duration::as_secs(&duration).to_string(),
-            Err(e) => panic!("SystemTimeError difference: {:?}", e.duration()),
-        });
+        create_args
+            .archive
+            .unwrap_or(match SystemTime::now().duration_since(UNIX_EPOCH) {
+                Ok(duration) => Duration::as_secs(&duration).to_string(),
+                Err(e) => panic!("SystemTimeError difference: {:?}", e.duration()),
+            });
 
-    let pattern_instructions = generate_pattern_instructions(include_patterns, exclude_patterns);
+    let pattern_instructions =
+        generate_pattern_instructions(create_args.include_patterns, create_args.exclude_patterns);
 
     let create_options = new_create_options(
-        repository_path,
-        passphrase,
+        create_args.repository,
+        create_args.passphrase,
+        create_args.paths,
         archive_name,
-        paths,
         pattern_instructions,
     );
     let common_options = CommonOptions::default();
@@ -87,5 +116,5 @@ pub fn create_archive(
     println!("Ended at: {}", create_result.archive.end);
     println!("Took: {}", create_result.archive.duration);
     // println!("Commands used: {:?}", create_result.archive.command_line);
-    print_command(create_result.archive.command_line);
+    print_used_command(create_result.archive.command_line);
 }
