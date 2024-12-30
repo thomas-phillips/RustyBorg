@@ -1,8 +1,9 @@
-use borgbackup::common::{EncryptionMode, InitOptions};
+use std::process;
+
 use clap::{Parser, Subcommand};
 
 mod borg;
-mod sshverify;
+mod util;
 
 #[derive(Parser, Debug)]
 #[command(name = "RustyBorg")]
@@ -10,33 +11,19 @@ mod sshverify;
 #[command(author = "Thomas Phillips")]
 #[command(about = "")]
 struct Args {
+    // #[arg(short, long, default_value_t = false)]
+    // daemonize: bool,
     #[command(subcommand)]
     cmd: Commands,
 }
 
 #[derive(Subcommand, Debug, Clone)]
 enum Commands {
-    Init {
-        repository_path: String,
-        passphrase: String,
-    },
-    Create {
-        repository_path: String,
-        #[arg(short, long)]
-        passphrase: String,
-        #[arg(short, long)]
-        archive: Option<String>,
-        #[arg(long, num_args = 1.., value_delimiter = ' ')]
-        paths: Vec<String>,
-        #[arg(long, num_args = 1.., value_delimiter = ' ')]
-        include_patterns: Option<Vec<String>>,
-        #[arg(long, num_args = 1.., value_delimiter = ' ')]
-        exclude_patterns: Option<Vec<String>>,
-    },
-    List {
-        repository: String,
-        passphrase: String,
-    },
+    Init(borg::init::InitArgs),
+    Create(borg::create::CreateArgs),
+    List(borg::list::ListArgs),
+    Verify(util::sshverify::VerifyArgs),
+    Schedule(util::schedule::ScheduleArgs),
 }
 
 fn main() {
@@ -44,37 +31,25 @@ fn main() {
     println!("{:#?}\n", args);
 
     match args.cmd {
-        Commands::Init {
-            repository_path,
-            passphrase,
-        } => {
-            let init_options = InitOptions {
-                repository: repository_path,
-                encryption_mode: EncryptionMode::KeyfileBlake2(passphrase),
-                append_only: false,
-                make_parent_dirs: false,
-                storage_quota: None,
-            };
-            borg::init::initialise_repository(&init_options);
+        Commands::Init(init_args) => {
+            borg::init::initialise_repository(&init_args);
         }
-        Commands::Create {
-            repository_path,
-            archive,
-            passphrase,
-            paths,
-            include_patterns,
-            exclude_patterns,
-        } => borg::create::create_archive(
-            repository_path,
-            passphrase,
-            archive,
-            paths,
-            include_patterns,
-            exclude_patterns,
-        ),
-        Commands::List {
-            repository,
-            passphrase,
-        } => borg::list::list_contents(repository, passphrase),
+        Commands::Create(create_args) => {
+            borg::create::create_archive(create_args);
+        }
+        Commands::List(list_args) => borg::list::list_contents(&list_args).unwrap(),
+        Commands::Verify(verify_args) => {
+            let test_con = util::sshverify::verify_connection(&verify_args);
+            match test_con {
+                Ok(()) => println!("Connection verified!"),
+                Err(e) => {
+                    eprintln!("{}", e);
+                    process::exit(1);
+                }
+            }
+        }
+        Commands::Schedule(schedule_args) => {
+            util::schedule::schedule_borg(&schedule_args)
+        }
     }
 }
