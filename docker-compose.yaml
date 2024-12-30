@@ -1,6 +1,21 @@
 services:
-  test_container:
-    build:
-      dockerfile: dockerfiles/test.Dockerfile
+  openssh-server:
+    image: linuxserver/openssh-server:latest
+    container_name: openssh-server
+    hostname: openssh-server
+    env_file: ".env"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Australia/Adelaide
+      # Set in `.env` file
+      # - PUBLIC_KEY=
+      - SUDO_ACCESS=false
+      - PASSWORD_ACCESS=disable
+      # - USER_PASSWORD=password #optional
+      - USER_NAME=test
+      - LOG_STDOUT=true
     ports:
-      - "2222:22"
+      - 2222:2222
+    restart: unless-stopped
+
