@@ -1,8 +1,6 @@
 #!/bin/bash
 
-PATTERN_FILE="patterns.txt"
 PASSPHRASE="password"
-SIZE="1K"
 
 create_repo() {
   local target=$(mktemp -d)
@@ -26,17 +24,25 @@ increment_size() {
 }
 
 create_files() {
+  local file_size="1K"
   local target_dir=$(mktemp -d)
-  echo "$target_dir"
 
   for i in {1..3}; do
     local file_name=$(random_file_name)
-    head -c "$SIZE" </dev/urandom >"${target_dir}/${file_name}"
+    head -c "$file_size" </dev/urandom >"${target_dir}/${file_name}"
 
-    SIZE=$(increment_size $SIZE)
+    local file_size=$(increment_size $size)
   done
 
   echo "$target_dir"
+}
+
+create_archive() {
+  for ((i = 1; i <= $1; i++)); do
+    local files=$(create_files)
+    cargo run -- create "$3" -p "$4" --paths "$files" >/dev/null
+    sleep $2
+  done
 }
 
 while [[ "$#" -gt 0 ]]; do
@@ -55,7 +61,7 @@ while [[ "$#" -gt 0 ]]; do
     echo "$TARGET"
     ;;
 
-  -s | --sync)
+  -c | --create)
     TARGET=$(mktemp -d)
     cargo run -- init "$TARGET" "$PASSPHRASE"
     echo "$TARGET"
@@ -63,10 +69,46 @@ while [[ "$#" -gt 0 ]]; do
     FILES=$(create_files)
 
     cargo run -- create "$TARGET" -p "$PASSPHRASE" \
-      --paths "$FILES" --pattern-file "$PATTERN_FILE" \
-      --archive "test"
+      --paths "$FILES" --archive "test"
+    # --include-patterns \
+    # --exclude-patterns
 
+    rm -rf "$TARGET"
     rm -rf "$FILES"
+    ;;
+
+  -l | --list)
+    TARGET=$(mktemp -d)
+    cargo run -- init "$TARGET" "$PASSPHRASE"
+    echo "$TARGET"
+
+    create_archive 5 1 "$TARGET" "$PASSPHRASE"
+
+    cargo run -- list "$TARGET" "$PASSPHRASE"
+
+    rm -rf "$TARGET"
+    rm -rf "$FILES"
+    ;;
+
+  -v | --verify)
+    docker compose up -d
+    USER=$(cat docker-compose.yaml | grep USER_NAME | xargs | sed "s/- //g" | awk 'BEGIN { FS = "=" }; {print $2 }')
+    CONTAINER_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' openssh-server)
+    PORT=$(cat docker-compose.yaml | grep ports --after-context 1 | xargs | sed "s/^[^0-9]*//" | sed "s/:.*//")
+    echo "$USER, $CONTAINER_IP, $PORT"
+
+    if ! ssh -o BatchMode=yes -o ConnectTimeout=6 ${USER}@${CONTAINER_IP} -p $PORT exit; then
+      echo "SSH Server OFFLINE"
+      exit 1
+    fi
+    echo "SSH Server ONLINE"
+
+    cargo run -- verify $USER $CONTAINER_IP -p $PORT
+    ;;
+
+  -s | --schedule)
+    cargo run -- schedule -e "0/5 * * * * *" -r `mktemp -d` -p "$PASSPHRASE"
+
     ;;
 
   *)
