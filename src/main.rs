@@ -22,8 +22,8 @@ enum Commands {
     Init(borg::init::InitArgs),
     Create(borg::create::CreateArgs),
     List(borg::list::ListArgs),
-    Verify(util::sshverify::VerifyArgs),
-    Schedule(util::schedule::ScheduleArgs),
+    Verify(util::VerifyArgs),
+    Schedule(borg::schedule::ScheduleArgs),
 }
 
 fn main() {
@@ -34,22 +34,25 @@ fn main() {
         Commands::Init(init_args) => {
             borg::init::initialise_repository(&init_args);
         }
-        Commands::Create(create_args) => {
-            borg::create::create_archive(create_args);
-        }
-        Commands::List(list_args) => borg::list::list_contents(&list_args).unwrap(),
+        Commands::Create(create_args) => match borg::create::create_archive(&create_args) {
+            Ok(n) => borg::create::display_create_info(n),
+            Err(err) => borg::errors::parse_archive_error(err),
+        },
+        Commands::List(list_args) => match borg::list::list_contents(list_args) {
+            Ok(()) => (),
+            Err(err) => {
+                eprintln!("{:?}", err);
+                process::exit(1);
+            }
+
+        },
         Commands::Verify(verify_args) => {
-            let test_con = util::sshverify::verify_connection(&verify_args);
+            let test_con = util::verify_connection(verify_args);
             match test_con {
                 Ok(()) => println!("Connection verified!"),
-                Err(e) => {
-                    eprintln!("{}", e);
-                    process::exit(1);
-                }
+                Err(e) => util::exiterr_with_message(1, &format!("{}", e)),
             }
         }
-        Commands::Schedule(schedule_args) => {
-            util::schedule::schedule_borg(&schedule_args)
-        }
+        Commands::Schedule(schedule_args) => borg::schedule::schedule_borg(&schedule_args),
     }
 }
