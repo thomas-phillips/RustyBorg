@@ -45,6 +45,11 @@ create_archive() {
   done
 }
 
+if [[ "$#" -eq 0 ]]; then
+  echo "No arguments supplied"
+  exit 1
+fi
+
 while [[ "$#" -gt 0 ]]; do
   case $1 in
   -h | --help)
@@ -107,7 +112,9 @@ while [[ "$#" -gt 0 ]]; do
     ;;
 
   -s | --schedule)
-    cargo run -- schedule -e "0/5 * * * * *" -r `mktemp -d` -p "$PASSPHRASE"
+    SCHEDULE_FILES=$(create_files)
+    cargo run -- schedule -e "0/5 * * * * *" -r `mktemp -d` \
+      -p "$PASSPHRASE" --paths "$SCHEDULE_FILES"
 
     ;;
 
