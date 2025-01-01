@@ -1,3 +1,4 @@
+use super::BorgTrait;
 use borgbackup::common::{CommonOptions, ListOptions};
 use borgbackup::errors::ListError;
 use borgbackup::sync::list;
@@ -5,21 +6,48 @@ use clap::Parser;
 
 // Struct for managing the necessary arguments for listing a
 // repository's details.
-#[derive(Debug, Clone, Parser)]
+#[derive(Debug, Clone, Parser, Default)]
 pub struct ListArgs {
     repository: String,
     passphrase: String,
+    #[arg(short, long, default_value_t = false)]
+    last_modified: bool,
+    #[arg(short, long, default_value_t = false)]
+    encryption: bool,
+    #[arg(short, long, default_value_t = false)]
+    archives: bool,
     // TODO: Add list options
 }
 
+impl BorgTrait for ListArgs {
+    fn repository(&self) -> String {
+        self.repository.to_owned()
+    }
+
+    fn passphrase(&self) -> String {
+        self.passphrase.to_owned()
+    }
+}
+
 impl ListArgs {
-    pub fn new(repository: String, passphrase: String) -> ListArgs {
-        ListArgs {repository, passphrase}
+    fn new(repository: &str, passphrase: &str) -> ListArgs {
+        let mut list_args = ListArgs::default();
+        list_args.repository = repository.to_owned();
+        list_args.passphrase = passphrase.to_owned();
+        list_args
+    }
+}
+
+pub fn verify_repo_location(repository: &str, passphrase: &str) -> bool {
+    let list_args = ListArgs::new(repository, passphrase);
+    match list_contents(list_args) {
+        Ok(()) => true,
+        Err(_) => false,
     }
 }
 
 // The entrypoint for the `list` module where a variable of type
-// ListArgs is passed containing the necessary information
+// ListArgs is consumed containing the necessary information
 // to list a borg repository's details.
 //
 // A ListOptions struct is created from the ListArgs parameter
@@ -29,43 +57,48 @@ impl ListArgs {
 // Else the function will display the last modified time,
 // encryption used (if any) and the repository's
 // archives (if any).
-pub fn list_contents(list_args: &ListArgs) -> Result<(), ListError> {
+pub fn list_contents(list_args: ListArgs) -> Result<(), ListError> {
     let list_options = ListOptions {
-        repository: list_args.repository.clone(),
-        passphrase: Some(list_args.passphrase.clone()),
+        repository: list_args.repository,
+        passphrase: Some(list_args.passphrase),
     };
     let common_options = CommonOptions::default();
 
-    let repository_details = list(&list_options, &common_options)?; 
+    let repository_details = list(&list_options, &common_options)?;
 
-    println!(
-        "Last modified: {}",
-        repository_details.repository.last_modified
-    );
-
-    let encryption_option = repository_details.encryption;
-    if Option::is_some(&encryption_option) {
-        let encryption = encryption_option.unwrap();
-        println!("Encryption mode: {:?}", encryption.mode);
-
-        match encryption.keyfile {
-            Some(n) => println!("Path of keyfile: {}", n),
-            None => (),
-        }
-    } else {
-        println!("Repository includes no encryption!")
-    }
-
-    println!("\nArchives:");
-    if repository_details.archives.len() == 0 {
-        println!("Repository has no archives");
-        return Ok(())
-    }
-    repository_details.archives.iter().for_each(|archive| {
+    if list_args.last_modified {
         println!(
-            "ID: {}, Name: {}, Start: {}",
-            archive.id, archive.name, archive.start
+            "Last modified: {}",
+            repository_details.repository.last_modified
         );
-    });
+    }
+
+    if list_args.encryption {
+        let encryption_option = repository_details.encryption;
+        if Option::is_some(&encryption_option) {
+            let encryption = encryption_option.unwrap();
+            println!("Encryption mode: {:?}", encryption.mode);
+
+            match encryption.keyfile {
+                Some(n) => println!("Path of keyfile: {}", n),
+                None => (),
+            }
+        } else {
+            println!("Repository includes no encryption!")
+        }
+    }
+    if list_args.archives {
+        println!("\nArchives:");
+        if repository_details.archives.len() == 0 {
+            println!("Repository has no archives");
+            return Ok(());
+        }
+        repository_details.archives.iter().for_each(|archive| {
+            println!(
+                "ID: {}, Name: {}, Start: {}",
+                archive.id, archive.name, archive.start
+            );
+        });
+    }
     Ok(())
 }

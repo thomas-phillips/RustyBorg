@@ -8,36 +8,71 @@ use daemonize::Daemonize;
 use std::fs::File;
 use std::thread;
 
-use super::super::borg::init::{initialise_repository, InitArgs};
-use super::super::borg::list::{list_contents, ListArgs};
+use super::create::{create_archive, display_create_info};
+use super::errors::parse_archive_error;
+use super::init::initialise_repository;
+use super::list::verify_repo_location;
+use super::{BorgTrait, CreateTrait};
 
 #[derive(Debug, Clone, Parser)]
 pub struct ScheduleArgs {
     #[arg(short, long, default_value_t = false)]
     daemonize: bool,
 
+    #[arg(short, long, default_value_t = false)]
+    verbose: bool,
+
     #[arg(short, long, default_value = "0 0 * * 1")]
     expression: String,
 
     #[arg(short, long, default_value = "Etc/UTC")]
     timezone: String,
+
     #[arg(short, long)]
     repository: String,
 
     #[arg(short, long)]
     passphrase: String,
-    //
-    // #[arg(short, long)]
-    // archive: Option<String>,
-    //
-    // #[arg(long, num_args = 1.., value_delimiter = ' ')]
-    // paths: Vec<String>,
-    //
-    // #[arg(long, num_args = 1.., value_delimiter = ' ')]
-    // include_patterns: Option<Vec<String>>,
-    //
-    // #[arg(long, num_args = 1.., value_delimiter = ' ')]
-    // exclude_patterns: Option<Vec<String>>,
+
+    #[arg(short, long)]
+    archive: Option<String>,
+
+    #[arg(long, num_args = 1.., value_delimiter = ' ')]
+    paths: Vec<String>,
+
+    #[arg(long, num_args = 1.., value_delimiter = ' ')]
+    include_patterns: Option<Vec<String>>,
+
+    #[arg(long, num_args = 1.., value_delimiter = ' ')]
+    exclude_patterns: Option<Vec<String>>,
+}
+
+impl BorgTrait for ScheduleArgs {
+    fn repository(&self) -> String {
+        self.repository.to_owned()
+    }
+
+    fn passphrase(&self) -> String {
+        self.passphrase.to_owned()
+    }
+}
+
+impl CreateTrait for ScheduleArgs {
+    fn archive(&self) -> Option<String> {
+        self.archive.to_owned()
+    }
+
+    fn paths(&self) -> Vec<String> {
+        self.paths.to_owned()
+    }
+
+    fn include_patterns(&self) -> Option<Vec<String>> {
+        self.include_patterns.to_owned()
+    }
+
+    fn exclude_patterns(&self) -> Option<Vec<String>> {
+        self.exclude_patterns.to_owned()
+    }
 }
 
 impl ScheduleArgs {
@@ -47,17 +82,6 @@ impl ScheduleArgs {
 
     fn generate_timezone(&self) -> Tz {
         self.timezone.parse().expect("Failed to parse timezone")
-    }
-    fn create_init(&self) -> InitArgs {
-        InitArgs::new(self.repository.clone(), self.passphrase.clone())
-    }
-
-    fn verify_repo_location(&self) -> bool {
-        let list_args = ListArgs::new(self.repository.clone(), self.passphrase.clone());
-        match list_contents(&list_args) {
-            Ok(()) => true,
-            Err(_) => false,
-        }
     }
 }
 
@@ -90,7 +114,6 @@ pub fn schedule_borg(schedule_args: &ScheduleArgs) {
 
     let schedule = schedule_args.generate_expression();
     let timezone = schedule_args.generate_timezone();
-    let init_args = schedule_args.create_init();
 
     loop {
         let now = Utc::now().with_timezone(&timezone);
@@ -101,8 +124,23 @@ pub fn schedule_borg(schedule_args: &ScheduleArgs) {
                 "Running every 5 seconds. Current time: {}",
                 Local::now().format("%Y-%m-%d %H:%M:%S")
             );
-            if !schedule_args.verify_repo_location() {
-                initialise_repository(&init_args);
+            if !verify_repo_location(&schedule_args.repository, &schedule_args.passphrase) {
+                initialise_repository(schedule_args);
+            }
+
+            match create_archive(schedule_args) {
+                Ok(n) => {
+                    if schedule_args.verbose {
+                        display_create_info(n)
+                    } else {
+                        println!("Archive created!")
+                    }
+                }
+                Err(err) => {
+                    if schedule_args.verbose {
+                        parse_archive_error(err);
+                    }
+                }
             }
         }
     }

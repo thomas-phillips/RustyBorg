@@ -1,8 +1,10 @@
+use super::errors::ArchiveError;
+use super::{BorgTrait, CreateTrait};
 use borgbackup::common::{CommonOptions, CreateOptions, Pattern, PatternInstruction};
 use borgbackup::output::create::Create;
 use borgbackup::sync::create;
 use clap::Parser;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, SystemTimeError, UNIX_EPOCH};
 
 // Struct for managing the necessary arguments for creating an archive.
 #[derive(Debug, Clone, Parser)]
@@ -18,6 +20,34 @@ pub struct CreateArgs {
     include_patterns: Option<Vec<String>>,
     #[arg(long, num_args = 1.., value_delimiter = ' ')]
     exclude_patterns: Option<Vec<String>>,
+}
+
+impl BorgTrait for CreateArgs {
+    fn repository(&self) -> String {
+        self.repository.to_owned()
+    }
+
+    fn passphrase(&self) -> String {
+        self.passphrase.to_owned()
+    }
+}
+
+impl CreateTrait for CreateArgs {
+    fn archive(&self) -> Option<String> {
+        self.archive.to_owned()
+    }
+
+    fn paths(&self) -> Vec<String> {
+        self.paths.to_owned()
+    }
+
+    fn include_patterns(&self) -> Option<Vec<String>> {
+        self.include_patterns.to_owned()
+    }
+
+    fn exclude_patterns(&self) -> Option<Vec<String>> {
+        self.exclude_patterns.to_owned()
+    }
 }
 
 // Creates a CreateOption struct using the struct's `new`
@@ -70,44 +100,12 @@ fn generate_pattern_instructions(
     return vec![include_pattern_instruction, exclude_pattern_instruction].concat();
 }
 
-// This is the entrypoint of the **create** module where variable of type
-// CreateArgs is passed containing the necessary information
-// to create a borg archive.
-//
-// The archive name will be automatically set to epoch time if isn't set,
-// and pattern instructions are generated from include and excude Vectors.
-//
-// Upon a successful archive creation the start and end time, duration and
-// commands used are displayed.
-pub fn create_archive(create_args: CreateArgs) {
-    let archive_name: String =
-        create_args
-            .archive
-            .unwrap_or(match SystemTime::now().duration_since(UNIX_EPOCH) {
-                Ok(duration) => Duration::as_secs(&duration).to_string(),
-                Err(e) => panic!("SystemTimeError difference: {:?}", e.duration()),
-            });
+fn get_epoch_name() -> Result<String, SystemTimeError> {
+    let epoch_duration = SystemTime::now().duration_since(UNIX_EPOCH)?;
+    Ok(Duration::as_secs(&epoch_duration).to_string())
+}
 
-    let pattern_instructions =
-        generate_pattern_instructions(create_args.include_patterns, create_args.exclude_patterns);
-
-    let create_options = new_create_options(
-        create_args.repository,
-        create_args.passphrase,
-        create_args.paths,
-        archive_name,
-        pattern_instructions,
-    );
-    let common_options = CommonOptions::default();
-
-    let create_result: Create = match create(&create_options, &common_options) {
-        Ok(n) => n,
-        Err(e) => {
-            println!("{}", e);
-            panic!("Error creating archive: {}", e);
-        }
-    };
-
+pub fn display_create_info(create_result: Create) {
     println!(
         "Successfully created archive at {}::{}",
         create_result.repository.location, create_result.archive.name,
@@ -115,6 +113,43 @@ pub fn create_archive(create_args: CreateArgs) {
     println!("Started at: {}", create_result.archive.start);
     println!("Ended at: {}", create_result.archive.end);
     println!("Took: {}", create_result.archive.duration);
-    // println!("Commands used: {:?}", create_result.archive.command_line);
     print_used_command(create_result.archive.command_line);
+}
+
+// This is the entrypoint of the **create** module where variable of type
+// CreateArgs is consumed containing the necessary information
+// to create a borg archive.
+//
+// The archive name will be automatically set to epoch time if isn't set,
+// and pattern instructions are generated from include and excude Vectors.
+//
+// Upon a successful archive creation the start and end time, duration and
+// commands used are displayed.
+pub fn create_archive(create_args: &impl CreateTrait) -> Result<Create, ArchiveError> {
+    let archive_name: String =
+        create_args
+            .archive()
+            .unwrap_or(match get_epoch_name() {
+                Ok(n) => n,
+                Err(_) => return Err(ArchiveError::EpochTimeError),
+            });
+
+    let pattern_instructions = generate_pattern_instructions(
+        create_args.include_patterns(),
+        create_args.exclude_patterns(),
+    );
+
+    let create_options = new_create_options(
+        create_args.repository(),
+        create_args.passphrase(),
+        create_args.paths(),
+        archive_name,
+        pattern_instructions,
+    );
+    let common_options = CommonOptions::default();
+
+    match create(&create_options, &common_options) {
+        Ok(n) => return Ok(n),
+        Err(e) => return Err(ArchiveError::ArchiveCreateError(e)),
+    };
 }
