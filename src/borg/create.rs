@@ -1,3 +1,4 @@
+use super::super::util;
 use super::errors::ArchiveError;
 use super::{BorgTrait, CreateTrait};
 use borgbackup::common::{CommonOptions, CreateOptions, Pattern, PatternInstruction};
@@ -66,12 +67,11 @@ fn new_create_options(
 
 // Prints the command used for the BorgBackup crate.
 fn print_used_command(commands: Vec<String>) {
-    println!("\nCommand used:");
-
-    for command in commands.iter() {
-        print!("{} ", command);
+    let mut command = String::new();
+    for c in commands.iter() {
+        command.push_str(c);
     }
-    println!("");
+    util::log_print(&format!("Command used: {}", command), util::LogLevel::Info);
 }
 
 // This function generates a Vector of `PatternInstruction`
@@ -106,13 +106,16 @@ fn get_epoch_name() -> Result<String, SystemTimeError> {
 }
 
 pub fn display_create_info(create_result: Create) {
-    println!(
-        "Successfully created archive at {}::{}",
-        create_result.repository.location, create_result.archive.name,
+    util::log_print(
+        &format!(
+            "Successfully created archive at {}::{}",
+            create_result.repository.location, create_result.archive.name
+        ),
+        util::LogLevel::Info,
     );
-    println!("Started at: {}", create_result.archive.start);
-    println!("Ended at: {}", create_result.archive.end);
-    println!("Took: {}", create_result.archive.duration);
+    util::log_print(&format!("Started at: {}", create_result.archive.start), util::LogLevel::Info);
+    util::log_print(&format!("Ended at: {}", create_result.archive.end), util::LogLevel::Info);
+    util::log_print(&format!("Took: {}", create_result.archive.duration), util::LogLevel::Info);
     print_used_command(create_result.archive.command_line);
 }
 
@@ -126,13 +129,10 @@ pub fn display_create_info(create_result: Create) {
 // Upon a successful archive creation the start and end time, duration and
 // commands used are displayed.
 pub fn create_archive(create_args: &impl CreateTrait) -> Result<Create, ArchiveError> {
-    let archive_name: String =
-        create_args
-            .archive()
-            .unwrap_or(match get_epoch_name() {
-                Ok(n) => n,
-                Err(_) => return Err(ArchiveError::EpochTimeError),
-            });
+    let archive_name: String = create_args.archive().unwrap_or(match get_epoch_name() {
+        Ok(n) => n,
+        Err(_) => return Err(ArchiveError::EpochTimeError),
+    });
 
     let pattern_instructions = generate_pattern_instructions(
         create_args.include_patterns(),

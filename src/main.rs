@@ -1,5 +1,3 @@
-use std::process;
-
 use clap::{Parser, Subcommand};
 
 mod borg;
@@ -27,8 +25,8 @@ enum Commands {
 }
 
 fn main() {
+    env_logger::init();
     let args = Args::parse();
-    println!("{:#?}\n", args);
 
     match args.cmd {
         Commands::Init(init_args) => {
@@ -41,16 +39,14 @@ fn main() {
         Commands::List(list_args) => match borg::list::list_contents(list_args) {
             Ok(()) => (),
             Err(err) => {
-                eprintln!("{:?}", err);
-                process::exit(1);
+                util::log_print(&format!("{:?}", err), util::LogLevel::Error);
             }
-
         },
         Commands::Verify(verify_args) => {
             let test_con = util::verify_connection(verify_args);
             match test_con {
                 Ok(()) => println!("Connection verified!"),
-                Err(e) => util::exiterr_with_message(1, &format!("{}", e)),
+                Err(e) => util::log_print(&format!("{}", e), util::LogLevel::Error),
             }
         }
         Commands::Schedule(schedule_args) => borg::schedule::schedule_borg(&schedule_args),

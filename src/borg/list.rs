@@ -3,6 +3,7 @@ use borgbackup::common::{CommonOptions, ListOptions};
 use borgbackup::errors::ListError;
 use borgbackup::sync::list;
 use clap::Parser;
+use super::super::util;
 
 // Struct for managing the necessary arguments for listing a
 // repository's details.
@@ -67,37 +68,31 @@ pub fn list_contents(list_args: ListArgs) -> Result<(), ListError> {
     let repository_details = list(&list_options, &common_options)?;
 
     if list_args.last_modified {
-        println!(
-            "Last modified: {}",
-            repository_details.repository.last_modified
-        );
+        util::log_print(&format!("Last modified: {}", repository_details.repository.last_modified), util::LogLevel::Info);
     }
 
     if list_args.encryption {
         let encryption_option = repository_details.encryption;
         if Option::is_some(&encryption_option) {
             let encryption = encryption_option.unwrap();
-            println!("Encryption mode: {:?}", encryption.mode);
+            util::log_print(&format!("Encryption mode: {:?}", encryption.mode), util::LogLevel::Info);
 
             match encryption.keyfile {
-                Some(n) => println!("Path of keyfile: {}", n),
+                Some(n) => util::log_print(&format!("Path of keyfile: {}", n), util::LogLevel::Info),
                 None => (),
             }
         } else {
-            println!("Repository includes no encryption!")
+            util::log_print(&format!("Repository includes no encryption!"), util::LogLevel::Info)
         }
     }
     if list_args.archives {
-        println!("\nArchives:");
+        util::log_print("\nArchives:", util::LogLevel::Info);
         if repository_details.archives.len() == 0 {
-            println!("Repository has no archives");
+            util::log_print("Repository has no archives", util::LogLevel::Warn);
             return Ok(());
         }
         repository_details.archives.iter().for_each(|archive| {
-            println!(
-                "ID: {}, Name: {}, Start: {}",
-                archive.id, archive.name, archive.start
-            );
+            util::log_print(&format!("ID: {}, Name: {}, Start: {}", archive.id, archive.name, archive.start), util::LogLevel::Info);
         });
     }
     Ok(())

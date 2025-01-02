@@ -1,3 +1,4 @@
+use super::super::util;
 use super::BorgTrait;
 use borgbackup::common::{CommonOptions, EncryptionMode, InitOptions};
 use borgbackup::sync::init;
@@ -40,7 +41,7 @@ pub fn initialise_repository(init_args: &impl BorgTrait) {
     let common_options = CommonOptions::default();
 
     match init(&init_options, &common_options) {
-        Ok(_) => println!("Repository successfully created!"),
-        Err(e) => println!("Operation failed: {}", e),
+        Ok(_) => util::log_print("Repository successfully created", util::LogLevel::Info),
+        Err(e) => util::log_print(&format!("Operation failed: {}", e), util::LogLevel::Warn),
     }
 }

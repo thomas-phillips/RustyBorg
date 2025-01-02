@@ -1,12 +1,13 @@
-use std::str::FromStr;
-
-use chrono::{Local, Utc};
+use chrono::Utc;
 use chrono_tz::Tz;
 use clap::Parser;
 use cron::{self, Schedule};
 use daemonize::Daemonize;
 use std::fs::File;
+use std::str::FromStr;
 use std::thread;
+
+use crate::util;
 
 use super::create::{create_archive, display_create_info};
 use super::errors::parse_archive_error;
@@ -85,31 +86,27 @@ impl ScheduleArgs {
     }
 }
 
-fn daemonize_schedule() {
-    let stdout = File::create("/tmp/daemon.out").unwrap();
-    let stderr = File::create("/tmp/daemon.err").unwrap();
+fn daemonize_schedule() -> Result<(), Box<dyn std::error::Error>> {
+    let stdout = File::create("/tmp/rusty_borg.out")?;
+    let stderr = File::create("/tmp/rusty_borg.err")?;
 
     let daemonize = Daemonize::new()
-        .pid_file("/tmp/test.pid") // Every method except `new` and `start`
-        .chown_pid_file(true) // is optional, see `Daemonize` documentation
+        .pid_file("/tmp/rusty_borg.pid") // PID file
+        .chown_pid_file(true) // Change ownership of the PID file
         .working_directory("/tmp") // for default behaviour.
-        .user("nobody")
-        .group("daemon") // Group name
-        .group(2) // or group id.
-        .umask(0o777) // Set umask, `0o027` by default.
         .stdout(stdout) // Redirect stdout to `/tmp/daemon.out`.
-        .stderr(stderr) // Redirect stderr to `/tmp/daemon.err`.
-        .privileged_action(|| "Executed before drop privileges");
+        .stderr(stderr); // Redirect stderr to `/tmp/daemon.err`.
 
-    match daemonize.start() {
-        Ok(_) => println!("Success, daemonized"),
-        Err(e) => eprintln!("Error, {}", e),
-    }
+    daemonize.start()?;
+    Ok(())
 }
 
 pub fn schedule_borg(schedule_args: &ScheduleArgs) {
     if schedule_args.daemonize {
-        daemonize_schedule();
+        match daemonize_schedule() {
+            Ok(()) => util::log_print("Running daemon", util::LogLevel::Info),
+            Err(e) => util::log_print(&format!("Error: {}", e), util::LogLevel::Error),
+        }
     }
 
     let schedule = schedule_args.generate_expression();
@@ -120,10 +117,6 @@ pub fn schedule_borg(schedule_args: &ScheduleArgs) {
         if let Some(next) = schedule.upcoming(timezone).take(1).next() {
             let until_next = next - now;
             thread::sleep(until_next.to_std().unwrap());
-            println!(
-                "Running every 5 seconds. Current time: {}",
-                Local::now().format("%Y-%m-%d %H:%M:%S")
-            );
             if !verify_repo_location(&schedule_args.repository, &schedule_args.passphrase) {
                 initialise_repository(schedule_args);
             }
@@ -133,7 +126,7 @@ pub fn schedule_borg(schedule_args: &ScheduleArgs) {
                     if schedule_args.verbose {
                         display_create_info(n)
                     } else {
-                        println!("Archive created!")
+                        util::log_print("Archive created!", util::LogLevel::Info)
                     }
                 }
                 Err(err) => {
