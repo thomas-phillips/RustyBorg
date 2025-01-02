@@ -153,3 +153,69 @@ pub fn create_archive(create_args: &impl CreateTrait) -> Result<Create, ArchiveE
         Err(e) => return Err(ArchiveError::ArchiveCreateError(e)),
     };
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn setup() -> CreateArgs {
+        CreateArgs {
+            repository: String::from("repository"),
+            passphrase: String::from("passphrase"),
+            archive: Some(String::from("archive")),
+            paths: Vec::new(),
+            include_patterns: Some(Vec::new()),
+            exclude_patterns: Some(Vec::new()),
+        }
+    }
+
+    #[test]
+    fn test_get_repository() {
+        let create_args = setup();
+        assert_eq!(create_args.repository(), String::from("repository"))
+    }
+
+    #[test]
+    fn test_get_passphrase() {
+        let create_args = setup();
+        assert_eq!(create_args.passphrase(), String::from("passphrase"))
+    }
+
+    #[test]
+    fn test_archive_some() {
+        let create_args = setup();
+        assert_eq!(create_args.archive(), Some(String::from("archive")));
+    }
+
+    #[test]
+    fn test_archive_none() {
+        let mut create_args = setup();
+        create_args.archive = None;
+        assert_eq!(create_args.archive(), None);
+    }
+
+    #[test]
+    fn test_paths() {
+        let result: Vec<String> = Vec::new();
+        assert_eq!(result.len(), 0);
+
+        let create_args = setup();
+        assert_eq!(create_args.paths.len(), 0);
+
+        assert_eq!(create_args.paths(), result);
+    }
+
+    #[test]
+    fn test_include_patterns_some() {
+        let create_args = setup();
+        let result: Option<Vec<String>> = Some(Vec::new());
+        assert_eq!(create_args.include_patterns(), result);
+    }
+
+    #[test]
+    fn test_include_patterns_none() {
+        let mut create_args = setup();
+        create_args.include_patterns = None;
+        assert_eq!(create_args.include_patterns(), None);
+    }
+}
