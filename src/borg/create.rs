@@ -113,9 +113,18 @@ pub fn display_create_info(create_result: Create) {
         ),
         util::LogLevel::Info,
     );
-    util::log_print(&format!("Started at: {}", create_result.archive.start), util::LogLevel::Info);
-    util::log_print(&format!("Ended at: {}", create_result.archive.end), util::LogLevel::Info);
-    util::log_print(&format!("Took: {}", create_result.archive.duration), util::LogLevel::Info);
+    util::log_print(
+        &format!("Started at: {}", create_result.archive.start),
+        util::LogLevel::Info,
+    );
+    util::log_print(
+        &format!("Ended at: {}", create_result.archive.end),
+        util::LogLevel::Info,
+    );
+    util::log_print(
+        &format!("Took: {}", create_result.archive.duration),
+        util::LogLevel::Info,
+    );
     print_used_command(create_result.archive.command_line);
 }
 
@@ -156,9 +165,11 @@ pub fn create_archive(create_args: &impl CreateTrait) -> Result<Create, ArchiveE
 
 #[cfg(test)]
 mod tests {
+    use super::super::super::util;
+    use super::super::init;
     use super::*;
 
-    fn setup() -> CreateArgs {
+    fn setup_create_args() -> CreateArgs {
         CreateArgs {
             repository: String::from("repository"),
             passphrase: String::from("passphrase"),
@@ -171,25 +182,25 @@ mod tests {
 
     #[test]
     fn test_get_repository() {
-        let create_args = setup();
-        assert_eq!(create_args.repository(), String::from("repository"))
+        let create_args = setup_create_args();
+        assert_eq!(create_args.repository(), "repository")
     }
 
     #[test]
     fn test_get_passphrase() {
-        let create_args = setup();
-        assert_eq!(create_args.passphrase(), String::from("passphrase"))
+        let create_args = setup_create_args();
+        assert_eq!(create_args.passphrase(), "passphrase")
     }
 
     #[test]
     fn test_archive_some() {
-        let create_args = setup();
-        assert_eq!(create_args.archive(), Some(String::from("archive")));
+        let create_args = setup_create_args();
+        assert_eq!(create_args.archive(), Some("archive".to_owned()));
     }
 
     #[test]
     fn test_archive_none() {
-        let mut create_args = setup();
+        let mut create_args = setup_create_args();
         create_args.archive = None;
         assert_eq!(create_args.archive(), None);
     }
@@ -199,7 +210,7 @@ mod tests {
         let result: Vec<String> = Vec::new();
         assert_eq!(result.len(), 0);
 
-        let create_args = setup();
+        let create_args = setup_create_args();
         assert_eq!(create_args.paths.len(), 0);
 
         assert_eq!(create_args.paths(), result);
@@ -207,15 +218,160 @@ mod tests {
 
     #[test]
     fn test_include_patterns_some() {
-        let create_args = setup();
+        let create_args = setup_create_args();
         let result: Option<Vec<String>> = Some(Vec::new());
         assert_eq!(create_args.include_patterns(), result);
     }
 
     #[test]
     fn test_include_patterns_none() {
-        let mut create_args = setup();
+        let mut create_args = setup_create_args();
         create_args.include_patterns = None;
         assert_eq!(create_args.include_patterns(), None);
+    }
+
+    #[test]
+    fn test_exclude_patterns_some() {
+        let create_args = setup_create_args();
+        let result: Option<Vec<String>> = Some(Vec::new());
+        assert_eq!(create_args.exclude_patterns(), result);
+    }
+
+    #[test]
+    fn test_exclude_patterns_none() {
+        let mut create_args = setup_create_args();
+        create_args.exclude_patterns = None;
+        assert_eq!(create_args.exclude_patterns(), None);
+    }
+
+    #[test]
+    fn test_new_create_options() {
+        let create_options = new_create_options(
+            "repository".to_owned(),
+            "passphrase".to_owned(),
+            Vec::new(),
+            "archive".to_owned(),
+            Vec::new(),
+        );
+        assert_eq!(create_options.repository, "repository");
+        assert_eq!(create_options.passphrase, Some("passphrase".to_owned()));
+        assert_eq!(create_options.paths.len(), 0);
+        assert_eq!(create_options.archive, "archive");
+        assert_eq!(create_options.patterns.len(), 0);
+    }
+    #[test]
+    fn test_generate_pattern_instructions_some() {
+        let include: Option<Vec<String>> = Some(vec!["test_include".to_owned()]);
+        let exclude: Option<Vec<String>> = Some(vec!["test_exclude".to_owned()]);
+
+        let result = generate_pattern_instructions(include, exclude);
+
+        assert_eq!(result.len(), 2);
+        for p in result.into_iter() {
+            match p {
+                PatternInstruction::Include(Pattern::Shell(val)) => {
+                    assert_eq!(val, "test_include")
+                }
+                PatternInstruction::Exclude(Pattern::Shell(val)) => {
+                    assert_eq!(val, "test_exclude")
+                }
+                _ => assert!(false),
+            }
+        }
+    }
+
+    #[test]
+    fn test_generate_pattern_instructions_none() {
+        let include: Option<Vec<String>> = None;
+        let exclude: Option<Vec<String>> = None;
+
+        let result = generate_pattern_instructions(include, exclude);
+        assert_eq!(result.len(), 0)
+    }
+
+    #[test]
+    fn test_generate_pattern_instructions_mix() {
+        let include1: Option<Vec<String>> = Some(vec!["test_include".to_owned()]);
+        let exlude1: Option<Vec<String>> = None;
+        let result1 = generate_pattern_instructions(include1, exlude1);
+
+        assert_eq!(result1.len(), 1);
+        for p in result1.into_iter() {
+            match p {
+                PatternInstruction::Include(Pattern::Shell(val)) => {
+                    assert_eq!(val, "test_include");
+                }
+                _ => assert!(false),
+            }
+        }
+
+        let include2: Option<Vec<String>> = None;
+        let exlude2: Option<Vec<String>> = Some(vec!["test_exclude".to_owned()]);
+
+        let result2 = generate_pattern_instructions(include2, exlude2);
+        assert_eq!(result2.len(), 1);
+        for p in result2.into_iter() {
+            match p {
+                PatternInstruction::Exclude(Pattern::Shell(val)) => {
+                    assert_eq!(val, "test_exclude");
+                }
+                _ => assert!(false),
+            }
+        }
+    }
+
+    #[test]
+    fn test_create_archive_pass() {
+        let repo_dir = util::get_temp_directory();
+        let target_dir = util::get_temp_directory();
+        let passphrase = "passphrase".to_owned();
+
+        let init_args = init::InitArgs {
+            repository: repo_dir.clone(),
+            passphrase: passphrase.clone(),
+        };
+        let _ = init::initialise_repository(&init_args);
+
+        let mut create_args = setup_create_args();
+        create_args.repository = repo_dir.clone();
+        create_args.paths = vec![target_dir.clone()];
+        create_args.passphrase = passphrase;
+
+        match create_archive(&create_args) {
+            Ok(n) => {
+                assert_eq!(n.repository.location, repo_dir);
+                assert_eq!(n.archive.name, "archive");
+            }
+            Err(e) => panic!("{:?}", e),
+        }
+    }
+
+    #[test]
+    fn test_create_archive_passphrase_fail() {
+        let repo_dir = util::get_temp_directory();
+        let target_dir = util::get_random_string(10);
+        let passphrase = "passphrase".to_owned();
+
+        let init_args = init::InitArgs {
+            repository: repo_dir.clone(),
+            passphrase: passphrase.clone(),
+        };
+        let _ = init::initialise_repository(&init_args);
+
+        let mut create_args = setup_create_args();
+        create_args.repository = repo_dir.clone();
+        create_args.paths = vec![target_dir.clone()];
+        create_args.passphrase = util::get_random_string(10);
+
+        match create_archive(&create_args) {
+            Ok(_) => assert!(false),
+            Err(e) => match e {
+                ArchiveError::ArchiveCreateError(create_error) => match create_error {
+                    borgbackup::errors::CreateError::PassphraseWrong => assert!(true),
+                    _ => assert!(false),
+                },
+                ArchiveError::EpochTimeError => assert!(false),
+            },
+        }
     }
 }

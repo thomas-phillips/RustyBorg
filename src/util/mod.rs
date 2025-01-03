@@ -1,8 +1,10 @@
 use clap::Parser;
 use log::{error, info, warn};
+use rand::{distributions::Alphanumeric, Rng};
 use ssh::Session;
 use std::env;
 use std::process;
+use tempfile;
 
 // Struct for managing the necessary arguments for verifying an SSH connection.
 #[derive(Debug, Clone, Parser)]
@@ -59,4 +61,21 @@ pub fn log_print(message: &str, level: LogLevel) {
             _ => println!("{}", message),
         }
     }
+}
+
+pub fn get_temp_directory() -> String {
+    tempfile::TempDir::new()
+        .expect("Failed to create a temporary directory")
+        .path()
+        .to_str()
+        .unwrap()
+        .to_owned()
+}
+
+pub fn get_random_string(length: usize) -> String {
+    rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(length)
+        .map(char::from)
+        .collect()
 }

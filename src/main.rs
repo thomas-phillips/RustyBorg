@@ -29,9 +29,10 @@ fn main() {
     let args = Args::parse();
 
     match args.cmd {
-        Commands::Init(init_args) => {
-            borg::init::initialise_repository(&init_args);
-        }
+        Commands::Init(init_args) => match borg::init::initialise_repository(&init_args) {
+            Ok(_) => util::log_print("Repository successfully created", util::LogLevel::Info),
+            Err(e) => util::log_print(&format!("Operation failed: {}", e), util::LogLevel::Error),
+        },
         Commands::Create(create_args) => match borg::create::create_archive(&create_args) {
             Ok(n) => borg::create::display_create_info(n),
             Err(err) => borg::errors::parse_archive_error(err),

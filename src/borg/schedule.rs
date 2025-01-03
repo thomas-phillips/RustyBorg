@@ -118,7 +118,14 @@ pub fn schedule_borg(schedule_args: &ScheduleArgs) {
             let until_next = next - now;
             thread::sleep(until_next.to_std().unwrap());
             if !verify_repo_location(&schedule_args.repository, &schedule_args.passphrase) {
-                initialise_repository(schedule_args);
+                match initialise_repository(schedule_args) {
+                    Ok(_) => {
+                        util::log_print("Repository successfully created", util::LogLevel::Info)
+                    }
+                    Err(e) => {
+                        util::log_print(&format!("Operation failed: {}", e), util::LogLevel::Error)
+                    }
+                }
             }
 
             match create_archive(schedule_args) {
@@ -136,5 +143,107 @@ pub fn schedule_borg(schedule_args: &ScheduleArgs) {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn setup_schedule_args() -> ScheduleArgs {
+        ScheduleArgs {
+            daemonize: false,
+            verbose: false,
+            expression: "0 0 * * 1".to_owned(),
+            timezone: "Etc/UTC".to_owned(),
+            repository: "repository".to_owned(),
+            passphrase: "passphrase".to_owned(),
+            archive: None,
+            paths: vec![],
+            include_patterns: None,
+            exclude_patterns: None,
+        }
+    }
+
+    #[test]
+    fn test_get_repository() {
+        let list_args = setup_schedule_args();
+        assert_eq!(list_args.repository(), "repository".to_owned());
+    }
+
+    #[test]
+    fn test_get_passphrase() {
+        let list_args = setup_schedule_args();
+        assert_eq!(list_args.passphrase(), "passphrase".to_owned());
+    }
+
+    #[test]
+    fn test_get_archive_some() {
+        let mut list_args = setup_schedule_args();
+        let expected = "archive".to_owned();
+        list_args.archive = Some(expected.clone());
+        assert_eq!(list_args.archive(), Some(expected.clone()));
+    }
+
+    #[test]
+    fn test_get_archive_none() {
+        let mut list_args = setup_schedule_args();
+        list_args.archive = None;
+        assert_eq!(list_args.archive(), None);
+    }
+
+    #[test]
+    fn test_get_paths() {
+        let mut list_args1 = setup_schedule_args();
+        list_args1.paths = vec![];
+        assert_eq!(list_args1.paths.len(), 0);
+
+        let mut list_args2 = setup_schedule_args();
+        list_args2.paths = vec!["test".to_owned()];
+        assert_eq!(list_args2.paths.len(), 1);
+    }
+
+    #[test]
+    fn test_get_include_patterns_some() {
+        let mut list_args1 = setup_schedule_args();
+        list_args1.include_patterns = Some(vec![]);
+        assert_eq!(list_args1.include_patterns().unwrap().len(), 0);
+
+        let mut list_args2 = setup_schedule_args();
+        list_args2.include_patterns = Some(vec!["test".to_owned()]);
+        assert_eq!(list_args2.include_patterns().unwrap().len(), 1);
+        assert_eq!(
+            list_args2.include_patterns().unwrap().get(0).unwrap(),
+            "test"
+        );
+    }
+
+    #[test]
+    fn test_get_include_patterns_none() {
+        let mut list_args1 = setup_schedule_args();
+        list_args1.include_patterns = None;
+        assert_eq!(list_args1.include_patterns(), None);
+    }
+
+    #[test]
+    fn test_get_exclude_patterns_some() {
+        let mut list_args1 = setup_schedule_args();
+        list_args1.exclude_patterns = Some(vec![]);
+        assert_eq!(list_args1.exclude_patterns().unwrap().len(), 0);
+
+        let mut list_args2 = setup_schedule_args();
+        list_args2.exclude_patterns = Some(vec!["test".to_owned()]);
+        assert_eq!(list_args2.exclude_patterns().unwrap().len(), 1);
+        assert_eq!(
+            list_args2.exclude_patterns().unwrap().get(0).unwrap(),
+            "test"
+        );
+    }
+
+    #[test]
+    fn test_get_exclude_patterns_none() {
+        let mut list_args1 = setup_schedule_args();
+        list_args1.exclude_patterns = None;
+        assert_eq!(list_args1.exclude_patterns(), None);
     }
 }
