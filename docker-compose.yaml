@@ -3,19 +3,43 @@ services:
     image: linuxserver/openssh-server:latest
     container_name: openssh-server
     hostname: openssh-server
-    env_file: ".env"
     environment:
       - PUID=1000
       - PGID=1000
       - TZ=Australia/Adelaide
-      # Set in `.env` file
-      # - PUBLIC_KEY=
+      - PUBLIC_KEY_DIR=/keys
       - SUDO_ACCESS=false
       - PASSWORD_ACCESS=disable
-      # - USER_PASSWORD=password #optional
       - USER_NAME=test
       - LOG_STDOUT=true
     ports:
       - 2222:2222
+    volumes:
+      - ./keys:/keys:ro
     restart: unless-stopped
+    networks:
+      test_network:
+        ipv4_address: 10.1.1.100
+    
+  cargo_tests:
+    depends_on:
+     - openssh-server
+    build:
+      context: .
+      dockerfile: dockerfiles/test.Dockerfile
+    environment:
+      - TARGET_USER=test
+      - TARGET_HOST=10.1.1.100
+      - TARGET_PORT=2222
+    volumes:
+      - ./keys/id_rsa:/root/.ssh/id_rsa:ro
+    networks:
+      test_network:
+        ipv4_address: 10.1.1.101
 
+networks:
+  test_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.1.1.0/24
