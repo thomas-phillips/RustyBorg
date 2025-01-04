@@ -5,7 +5,7 @@ mod util;
 
 #[derive(Parser, Debug)]
 #[command(name = "RustyBorg")]
-#[command(version = "1.0")]
+#[command(version = "0.1.0")]
 #[command(author = "Thomas Phillips")]
 #[command(about = "")]
 struct Args {
