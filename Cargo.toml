@@ -2,6 +2,11 @@
 name = "rusty_borg"
 version = "0.1.0"
 edition = "2021"
+authors = ["Thomas Phillips contact@thomas-phillips.dev"]
+license = "MIT"
+repository = "https://github.com/thomas-phillips/RustyBorg"
+readme = "README.md"
+description = "Tool for simplifying BorgBack"
 
 [dependencies]
 borgbackup = "0.9.1"
