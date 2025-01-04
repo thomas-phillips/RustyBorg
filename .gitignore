@@ -3,3 +3,5 @@
 .rustup
 
 .env
+
+Session.vim
