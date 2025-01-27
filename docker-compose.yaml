@@ -9,7 +9,7 @@ services:
       - TZ=Australia/Adelaide
       - PUBLIC_KEY_DIR=/keys
       - SUDO_ACCESS=false
-      - PASSWORD_ACCESS=disable
+      - PASSWORD_ACCESS=false
       - USER_NAME=test
       - LOG_STDOUT=true
     ports:
@@ -17,13 +17,20 @@ services:
     volumes:
       - ./keys:/keys:ro
     restart: unless-stopped
+    healthcheck:
+      test: ps aux | grep '[s]shd' || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
     networks:
       test_network:
         ipv4_address: 10.1.1.100
-    
+
   cargo_tests:
     depends_on:
-     - openssh-server
+      openssh-server:
+        condition: service_healthy
     build:
       context: .
       dockerfile: dockerfiles/test.Dockerfile

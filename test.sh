@@ -1,6 +1,7 @@
 #!/bin/bash
 
 PASSPHRASE="password"
+KEY="./keys/id_rsa"
 
 create_repo() {
   local target=$(mktemp -d)
@@ -96,14 +97,15 @@ while [[ "$#" -gt 0 ]]; do
     ;;
 
   -v | --verify)
-    docker compose up -d
+    docker compose up -d openssh-server
+    sleep 2
     USER=$(cat docker-compose.yaml | grep USER_NAME | xargs | sed "s/- //g" | awk 'BEGIN { FS = "=" }; {print $2 }')
     CONTAINER_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' openssh-server)
     PORT=$(cat docker-compose.yaml | grep ports --after-context 1 | xargs | sed "s/^[^0-9]*//" | sed "s/:.*//")
     echo "$USER, $CONTAINER_IP, $PORT"
 
-    if ! ssh -o BatchMode=yes -o ConnectTimeout=6 ${USER}@${CONTAINER_IP} -p $PORT exit; then
-      echo "SSH Server OFFLINE"
+    if ! ssh -o BatchMode=yes -o ConnectTimeout=6 ${USER}@${CONTAINER_IP} -p $PORT -i $KEY exit; then
+      echo "SSH Server OFFLINE" >&2
       exit 1
     fi
     echo "SSH Server ONLINE"
