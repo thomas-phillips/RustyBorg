@@ -46,7 +46,7 @@ fn main() {
         Commands::Verify(verify_args) => {
             let test_con = util::verify_connection(verify_args);
             match test_con {
-                Ok(()) => println!("Connection verified!"),
+                Ok(_) => println!("Connection verified!"),
                 Err(e) => util::log_print(&format!("{}", e), util::LogLevel::Error),
             }
         }
